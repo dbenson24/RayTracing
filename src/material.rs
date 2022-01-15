@@ -8,36 +8,37 @@ pub trait Material: Sync {
 
 }
 
-pub struct WithMat<'a, 'b, O: IntersectionRay + Sync + ?Sized, M: Material + ?Sized> {
-    pub obj: &'a O,
-    pub mat: &'b M,
+#[derive(Clone, Copy)]
+pub struct WithMat<'a, 'b> {
+    pub obj: &'a (dyn IntersectionRay + Sync),
+    pub mat: &'b (dyn Material),
 }
 
-impl<'a, 'b, O: IntersectionRay + Sync, M: Material> WithMat<'a, 'b, O, M>{
-    pub fn new(obj: &'a O, mat: &'b M) -> Self {
+impl<'a, 'b> WithMat<'a, 'b>{
+    pub fn new(obj: &'a (dyn IntersectionRay + Sync), mat: &'b (dyn Material)) -> Self {
         Self { obj, mat }
     }
 }
 
-impl<'a, 'b, O, M> Material for WithMat<'a, 'b, O, M> where O: IntersectionRay + Sync, M: Material {
+impl<'a, 'b> Material for WithMat<'a, 'b> {
     fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
         self.mat.scatter(ray, intersection)
     }
 }
 
-impl<'a, 'b, O, M> IntersectionRay for WithMat<'a, 'b, O, M> where O: IntersectionRay + Sync, M: Material {
+impl<'a, 'b> IntersectionRay for WithMat<'a, 'b> {
     fn intersects_ray(&self, ray: &Ray, t_min: bvh::Real, t_max: bvh::Real) -> Option<Intersection> {
         self.obj.intersects_ray(ray, t_min, t_max)
     }
 }
 
-pub trait IntoWithMat {
-    fn ToWithMat<'a, 'b, O: IntersectionRay + Sync + ?Sized, M: Material + ?Sized>(&'a self, mat: &'b M) -> Box<WithMat<'a, 'b, O, M>>;
+pub trait ToWithMat {
+    fn with_mat<'a, 'b>(&'a self, mat: &'b (dyn Material)) -> WithMat<'a, 'b>;
 }
 
-impl <T> IntoWithMat for T where T : IntersectionRay + Sync + ?Sized {
-    fn ToWithMat<'a, 'b, O: T, M: Material + ?Sized>(&'a self, mat: &'b M) -> Box<WithMat<'a, 'b, Self, M>> {
-        Box::new(WithMat::new(self, mat))
+impl <T> ToWithMat for T where T : IntersectionRay + Sync {
+    fn with_mat<'a, 'b>(&'a self, mat: &'b (dyn Material)) -> WithMat<'a, 'b> {
+        WithMat::new(self, mat)
     }
 }
 

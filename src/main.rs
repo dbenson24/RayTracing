@@ -14,7 +14,7 @@ use image::{ImageBuffer, Rgb};
 use rand::Rng;
 use rayon::prelude::*;
 
-use crate::{world::World, material::{Lambertian, Metal, WithMat}};
+use crate::{world::World, material::{Lambertian, Metal, WithMat, ToWithMat, Material}};
 use crate::{camera::Camera, color::RGB};
 
 fn ray_color(ray: &Ray, world: &World, depth: usize) -> Color {
@@ -61,10 +61,10 @@ fn main() {
     let l = WithMat::new(&left, &mat_left);
     let r = WithMat::new(&right, &mat_right);
 
-    world.objs.push(&g);
-    world.objs.push(&c);
-    world.objs.push(&l);
-    world.objs.push(&r);
+    world.objs.push(ground.with_mat(&mat_ground));
+    world.objs.push(center.with_mat(&mat_center));
+    world.objs.push(left.with_mat(&mat_left));
+    world.objs.push(right.with_mat(&mat_right));
 
     // Camera
     let origin = Vec3::new(0., 0., 0.);
