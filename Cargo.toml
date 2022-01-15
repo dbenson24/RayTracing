@@ -12,3 +12,4 @@ itertools = "0.10.3"
 rayon = "1.5.1"
 bvh = { path = "../bvh/bvh" }
 rand = "0.8.4"
+noise = "0.7.0"
