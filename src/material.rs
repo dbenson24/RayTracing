@@ -171,3 +171,20 @@ impl Material for Dielectric {
         ))
     }
 }
+
+pub struct Normals();
+
+impl Material for Normals {
+    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
+        let mut scatter_direction = intersection.norm + rand_unit_vector();
+
+        if scatter_direction.abs().min_element() < 1e-6 {
+            scatter_direction = intersection.norm
+        }
+        let hit = ray.at(intersection.distance);
+
+        let ray = Ray::new(hit, scatter_direction);
+        let albedo = (intersection.norm + 1.) * 0.5;
+        Some((ray, albedo))
+    }
+}

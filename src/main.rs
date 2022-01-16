@@ -21,7 +21,7 @@ use std::{
 };
 use texture::CheckerTex;
 
-use crate::{camera::Camera, color::RGB, mesh::Mesh, instance::Instance};
+use crate::{camera::Camera, color::RGB, mesh::Mesh, instance::Instance, material::Normals};
 use crate::{
     material::{Dielectric, Lambertian, Material, Metal, ToWithMat, WithMat},
     world::World,
@@ -85,16 +85,20 @@ fn render_trimesh() {
     let height = 720;
     let origin = Vec3::new(3., 6., 13.);
     let lookat = Vec3::new(0., 0., 0.);
-    let vfov = 70.;
+    let vfov = 50.;
     let mut world = World::new(vec![]);
     let mesh = Arc::new(Mesh::from_file("teapot.obj"));
-    let mat = Arc::new(Lambertian::new(Vec3::new(0.7, 0.6, 0.5)));
-    let metal = Arc::new(Metal::new(Vec3::new(0.9, 0.1, 0.1), 0.));
+    let sphere = Mesh::from_file("sphere.obj");
+    // let sphere = Sphere::new(Vec3::ZERO, 1.0);
+    // let mat = Arc::new(Lambertian::new(Vec3::new(0.9, 0.1, 0.1)));
+    let mat = Arc::new(Normals());
+    let metal = Arc::new(Metal::new(Vec3::new(0.7, 0.6, 0.5), 0.));
     let mesh_1 = Instance::from_trs(mesh.clone(), Vec3::new(-1.5, 0., 0.), Quat::IDENTITY, Vec3::new(2.0, 2.0, 2.0));
     let mesh_2 = Instance::from_t(mesh.clone(), Vec3::new(5.5, 0., 0.));
-    
-    world.objs.push(mesh_1.with_mat(mat));
-    world.objs.push(mesh_2.with_mat(metal));
+    let sphere_mesh = Instance::from_t(Arc::new(sphere), Vec3::new(-10.5, 0., 0.));
+    world.objs.push(mesh_1.with_mat(mat.clone()));
+    world.objs.push(mesh_2.with_mat(metal.clone()));
+    world.objs.push(sphere_mesh.with_mat(metal));
     world.build();
     for obj in &world.objs {
         dbg!(obj.node_index);
