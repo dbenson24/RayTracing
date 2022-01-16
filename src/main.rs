@@ -1,7 +1,10 @@
 mod camera;
 mod color;
 mod material;
+mod mesh;
+mod texture;
 mod world;
+mod instance;
 
 use bvh::{
     bvh::BVH,
@@ -9,50 +12,29 @@ use bvh::{
     sphere::Sphere,
 };
 use color::Color;
-use glam::Vec3;
+use glam::{Vec3, Quat};
 use image::{ImageBuffer, Rgb};
 use rand::Rng;
 use rayon::prelude::*;
-use std::{time::Instant, rc::Rc, borrow::Borrow};
+use std::{
+    borrow::Borrow, f32::consts::PI, fs::File, io::BufReader, rc::Rc, sync::Arc, time::Instant,
+};
+use texture::CheckerTex;
 
-use crate::{camera::Camera, color::RGB};
+use crate::{camera::Camera, color::RGB, mesh::Mesh, instance::Instance};
 use crate::{
     material::{Dielectric, Lambertian, Material, Metal, ToWithMat, WithMat},
     world::World,
 };
+use obj::{load_obj, Obj};
 
-const PI: f32 = 3.1415926535;
 
-fn ray_color(ray: &Ray, world: &World, depth: usize) -> Color {
-    if depth == 0 {
-        return Vec3::ZERO;
-    }
-
-    if let Some((obj, intersection)) = world.first_intersection(ray, 0.001, f32::INFINITY) {
-        if let Some((child_ray, attenuation)) = obj.scatter(ray, &intersection) {
-            ray_color(&child_ray, world, depth - 1) * attenuation
-        } else {
-            Vec3::ZERO
-        }
-    } else {
-        let t = 0.5 * (ray.direction.y + 1.0);
-        (1. - t) * Vec3::ONE + t * Vec3::new(0.5, 0.7, 1.0)
-    }
-}
 
 fn main() {
-    println!("Setup");
-    let aspect_ratio: f32 = 16.0 / 9.0;
-    let width = 1920;
-    let height = (width as f32 / aspect_ratio) as usize;
-    let mut pixels = vec![Color::default(); width * height];
+    render_trimesh()
+}
 
-    let samples_per_px = 100;
-    let max_bounces = 50;
-    let R = (PI / 4.).cos();
-    let aspect_ratio = 16.0 / 9.0;
-    let aperture = 0.1;
-
+fn random_sphere_world() -> World {
     let mut world = World::new(vec![]);
 
     let mut pairs = vec![];
@@ -69,64 +51,70 @@ fn main() {
     }
 
     for (sphere, mat) in &pairs {
-        world.objs.push(sphere.with_mat(mat.borrow()))
+        world.objs.push(sphere.with_mat(mat.clone()))
     }
 
-    let mat_ground = Lambertian::new(Vec3::new(0.5, 0.5, 0.5));
-
+    let mat_ground = Arc::new(Lambertian::from_tex(Arc::new(CheckerTex::from_colors(
+        Vec3::new(0.2, 0.3, 0.1),
+        Vec3::new(0.9, 0.9, 0.9),
+    ))));
     let ground = Sphere::new(Vec3::new(0., -1000.5, -1.), 1000.);
 
-    world.objs.push(ground.with_mat(&mat_ground));
+    world.objs.push(ground.with_mat(mat_ground));
 
-    let glass = Dielectric::new(1.5);
+    let glass = Arc::new(Dielectric::new(1.5));
     let glass_sphere = Sphere::new(Vec3::new(0., 1., 0.), 1.0);
-    world.objs.push(glass_sphere.with_mat(&glass));
+    world.objs.push(glass_sphere.with_mat(glass));
 
-    let brown = Lambertian::new(Vec3::new(0.4, 0.2, 0.1));
+    let brown = Arc::new(Lambertian::new(Vec3::new(0.4, 0.2, 0.1)));
     let brown_sphere = Sphere::new(Vec3::new(-4., 1., 0.), 1.0);
-    world.objs.push(brown_sphere.with_mat(&brown));
+    world.objs.push(brown_sphere.with_mat(brown));
 
-    let metal = Metal::new(Vec3::new(0.7, 0.6, 0.5), 0.0);
-    let metal_sphere = Sphere::new(Vec3::new(4., 1., 0.), 1.);
-    world.objs.push(metal_sphere.with_mat(&metal));
-
-
-
-    // Camera
-    let origin = Vec3::new(13., 2., 3.);
-    let lookat = Vec3::new(0., 0., 0.);
-    // let dist_to_focus = (lookat - origin).length();
-    let dist_to_focus = 10.;
-    let up = Vec3::new(0., 1., 0.);
-    let camera = Camera::new(origin, lookat, up, 40., aspect_ratio, aperture, dist_to_focus);
+    let metal = Arc::new(Metal::new(Vec3::new(0.7, 0.6, 0.5), 0.0));
+    let metal_sphere = Arc::new(Sphere::new(Vec3::ZERO, 1.));
+    let metal_sphere = Instance::from_trs(metal_sphere, Vec3::new(4., 1., 0.), Quat::IDENTITY, Vec3::new(1.0, 3.0, 1.0));
+    world.objs.push(metal_sphere.with_mat(metal));
 
     world.build();
 
-    println!("Begin Tracing");
+    world
+}
 
-    let now = Instant::now();
-    pixels.par_iter_mut().enumerate().for_each(|(i, px)| {
-        let x = i % width;
-        let y = (height - 1) - (i / width);
-        for _ in 0..samples_per_px {
-            let u = (x as f32 + random()) / (width - 1) as f32;
-            let v = (y as f32 + random()) / (height - 1) as f32;
-            let ray = camera.get_ray(u, v);
-            *px += ray_color(&ray, &world, max_bounces);
-        }
-    });
+fn render_trimesh() {
+    println!("Setup");
+    let height = 720;
+    let origin = Vec3::new(3., 6., 13.);
+    let lookat = Vec3::new(0., 0., 0.);
+    let vfov = 70.;
+    let mut world = World::new(vec![]);
+    let mesh = Arc::new(Mesh::from_file("teapot.obj"));
+    let mat = Arc::new(Lambertian::new(Vec3::new(0.7, 0.6, 0.5)));
+    let metal = Arc::new(Metal::new(Vec3::new(0.9, 0.1, 0.1), 0.));
+    let mesh_1 = Instance::from_trs(mesh.clone(), Vec3::new(-1.5, 0., 0.), Quat::IDENTITY, Vec3::new(2.0, 2.0, 2.0));
+    let mesh_2 = Instance::from_t(mesh.clone(), Vec3::new(5.5, 0., 0.));
+    
+    world.objs.push(mesh_1.with_mat(mat));
+    world.objs.push(mesh_2.with_mat(metal));
+    world.build();
+    for obj in &world.objs {
+        dbg!(obj.node_index);
+    }
 
-    let elapsed = now.elapsed();
-    println!("Done Tracing in {} ms", elapsed.as_millis());
+   
+    world.render("two_spheres.png", height, origin, lookat, vfov);
+}
 
-    let image = ImageBuffer::from_fn(width as u32, height as u32, |x, y| {
-        let i = (x + (y * width as u32)) as usize;
-        let c = pixels[i];
-        c.to_px(samples_per_px)
-    });
+fn render_random_spheres() {
+    println!("Setup");
+    let height = 480;
+    let world = random_sphere_world();
+    let vfov = 20.;
+    
+    let origin = Vec3::new(13., 2., 3.);
+    let lookat = Vec3::new(0., 0., 0.);
 
-    image.save("out.png").expect("Image to save");
-    println!("Image written to out.png");
+    world.render("random_spheres.png", height, origin, lookat, vfov);
+    
 }
 
 fn random() -> f32 {
@@ -191,17 +179,17 @@ fn reflectance(cosine: f32, refract_idx: f32) -> f32 {
     r0 + (1. - r0) * (1. - cosine).powf(5.)
 }
 
-fn rand_mat() -> Rc<dyn Material> {
+fn rand_mat() -> Arc<dyn Material> {
     let choose_mat = random();
     if choose_mat < 0.8 {
         // diffuse
         let albedo = rand_vec3() * rand_vec3();
-        Rc::new(Lambertian::new(albedo))
+        Arc::new(Lambertian::new(albedo))
     } else if choose_mat < 0.95 {
         let albedo = rand_vec3_range(0.5, 1.);
         let fuzz = rand_range(0., 0.5);
-        Rc::new(Metal::new(albedo, fuzz))
+        Arc::new(Metal::new(albedo, fuzz))
     } else {
-        Rc::new(Dielectric::new(1.5))
+        Arc::new(Dielectric::new(1.5))
     }
 }

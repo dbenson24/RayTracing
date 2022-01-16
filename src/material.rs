@@ -1,34 +1,47 @@
-use bvh::{ray::{Intersection, IntersectionRay, Ray}, bounding_hierarchy::BHShape, aabb::{Bounded, AABB}};
+use std::{rc::Rc, sync::Arc};
+
+use bvh::{
+    aabb::{Bounded, AABB},
+    bounding_hierarchy::BHShape,
+    ray::{Intersection, IntersectionRay, Ray},
+};
 use glam::Vec3;
 
 use crate::{
-    color::Color, rand_in_sphere, rand_unit_vector, random, reflect, reflectance, refract, world::Hittable,
+    color::Color,
+    rand_in_sphere, rand_unit_vector, random, reflect, reflectance, refract,
+    texture::{SolidTex, Texture},
+    world::Hittable,
 };
 
-pub trait Material: Sync {
+pub trait Material: Sync + Send {
     fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)>;
 }
 
-#[derive(Clone, Copy)]
-pub struct WithMat<'a, 'b> {
-    pub obj: &'a (dyn Hittable + Sync),
-    pub mat: &'b (dyn Material),
-    node_index: usize
+#[derive(Clone)]
+pub struct WithMat {
+    pub obj: Arc<(dyn Hittable)>,
+    pub mat: Arc<(dyn Material)>,
+    pub node_index: usize,
 }
 
-impl<'a, 'b> WithMat<'a, 'b> {
-    pub fn new(obj: &'a (dyn Hittable + Sync), mat: &'b (dyn Material)) -> Self {
-        Self { obj, mat, node_index: 0 }
+impl WithMat {
+    pub fn new(obj: Arc<(dyn Hittable)>, mat: Arc<(dyn Material)>) -> Self {
+        Self {
+            obj,
+            mat,
+            node_index: 0,
+        }
     }
 }
 
-impl<'a, 'b> Material for WithMat<'a, 'b> {
+impl Material for WithMat {
     fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
         self.mat.scatter(ray, intersection)
     }
 }
 
-impl<'a, 'b> IntersectionRay for WithMat<'a, 'b> {
+impl IntersectionRay for WithMat {
     fn intersects_ray(
         &self,
         ray: &Ray,
@@ -39,7 +52,7 @@ impl<'a, 'b> IntersectionRay for WithMat<'a, 'b> {
     }
 }
 
-impl BHShape for WithMat<'_, '_> {
+impl BHShape for WithMat {
     fn set_bh_node_index(&mut self, idx: usize) {
         self.node_index = idx
     }
@@ -49,31 +62,36 @@ impl BHShape for WithMat<'_, '_> {
     }
 }
 
-impl Bounded for WithMat<'_, '_> {
+impl Bounded for WithMat {
     fn aabb(&self) -> AABB {
         self.obj.aabb()
     }
 }
 
 pub trait ToWithMat {
-    fn with_mat<'a, 'b>(&'a self, mat: &'b (dyn Material)) -> WithMat<'a, 'b>;
+    fn with_mat(self, mat: Arc<(dyn Material)>) -> WithMat;
 }
 
 impl<T> ToWithMat for T
 where
-    T: Hittable + Sync,
+    T: Hittable + Sync + 'static,
 {
-    fn with_mat<'a, 'b>(&'a self, mat: &'b (dyn Material)) -> WithMat<'a, 'b> {
-        WithMat::new(self, mat)
+    fn with_mat(self, mat: Arc<(dyn Material)>) -> WithMat {
+        WithMat::new(Arc::new(self), mat)
     }
 }
 
 pub struct Lambertian {
-    pub albedo: Vec3,
+    pub albedo: Arc<dyn Texture>,
 }
 
 impl Lambertian {
     pub fn new(albedo: Vec3) -> Self {
+        let albedo = Arc::new(SolidTex::new(albedo));
+        Self { albedo }
+    }
+
+    pub fn from_tex(albedo: Arc<dyn Texture>) -> Self {
         Self { albedo }
     }
 }
@@ -85,9 +103,10 @@ impl Material for Lambertian {
         if scatter_direction.abs().min_element() < 1e-6 {
             scatter_direction = intersection.norm
         }
+        let hit = ray.at(intersection.distance);
 
-        let ray = Ray::new(ray.at(intersection.distance), scatter_direction);
-        Some((ray, self.albedo))
+        let ray = Ray::new(hit, scatter_direction);
+        Some((ray, self.albedo.value(intersection.u, intersection.v, &hit)))
     }
 }
 
