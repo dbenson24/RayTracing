@@ -1,18 +1,18 @@
 mod camera;
 mod color;
+mod instance;
 mod material;
 mod mesh;
 mod texture;
 mod world;
-mod instance;
 
 use bvh::{
     bvh::BVH,
     ray::{Intersection, IntersectionRay, Ray},
-    sphere::Sphere,
+    sphere::Sphere, aabb::Bounded,
 };
 use color::Color;
-use glam::{Vec3, Quat};
+use glam::{Quat, Vec3};
 use image::{ImageBuffer, Rgb};
 use rand::Rng;
 use rayon::prelude::*;
@@ -21,17 +21,21 @@ use std::{
 };
 use texture::CheckerTex;
 
-use crate::{camera::Camera, color::RGB, mesh::Mesh, instance::Instance, material::Normals};
+use crate::{
+    camera::Camera,
+    color::RGB,
+    instance::Instance,
+    material::{DiffuseLight, Normals},
+    mesh::Mesh,
+};
 use crate::{
     material::{Dielectric, Lambertian, Material, Metal, ToWithMat, WithMat},
     world::World,
 };
 use obj::{load_obj, Obj};
 
-
-
 fn main() {
-    render_trimesh()
+    cornell_box()
 }
 
 fn random_sphere_world() -> World {
@@ -72,7 +76,12 @@ fn random_sphere_world() -> World {
 
     let metal = Arc::new(Metal::new(Vec3::new(0.7, 0.6, 0.5), 0.0));
     let metal_sphere = Arc::new(Sphere::new(Vec3::ZERO, 1.));
-    let metal_sphere = Instance::from_trs(metal_sphere, Vec3::new(4., 1., 0.), Quat::IDENTITY, Vec3::new(1.0, 3.0, 1.0));
+    let metal_sphere = Instance::from_trs(
+        metal_sphere,
+        Vec3::new(4., 1., 0.),
+        Quat::IDENTITY,
+        Vec3::new(1.0, 3.0, 1.0),
+    );
     world.objs.push(metal_sphere.with_mat(metal));
 
     world.build();
@@ -87,13 +96,18 @@ fn render_trimesh() {
     let lookat = Vec3::new(0., 0., 0.);
     let vfov = 50.;
     let mut world = World::new(vec![]);
-    let mesh = Arc::new(Mesh::from_file("teapot.obj"));
-    let sphere = Mesh::from_file("sphere.obj");
+    let mesh = Arc::new(Mesh::from_file("teapot.obj", true));
+    let sphere = Mesh::from_file("sphere.obj", true);
     // let sphere = Sphere::new(Vec3::ZERO, 1.0);
     // let mat = Arc::new(Lambertian::new(Vec3::new(0.9, 0.1, 0.1)));
     let mat = Arc::new(Normals());
     let metal = Arc::new(Metal::new(Vec3::new(0.7, 0.6, 0.5), 0.));
-    let mesh_1 = Instance::from_trs(mesh.clone(), Vec3::new(-1.5, 0., 0.), Quat::IDENTITY, Vec3::new(2.0, 2.0, 2.0));
+    let mesh_1 = Instance::from_trs(
+        mesh.clone(),
+        Vec3::new(-1.5, 0., 0.),
+        Quat::IDENTITY,
+        Vec3::new(2.0, 2.0, 2.0),
+    );
     let mesh_2 = Instance::from_t(mesh.clone(), Vec3::new(5.5, 0., 0.));
     let sphere_mesh = Instance::from_t(Arc::new(sphere), Vec3::new(-10.5, 0., 0.));
     world.objs.push(mesh_1.with_mat(mat.clone()));
@@ -104,8 +118,15 @@ fn render_trimesh() {
         dbg!(obj.node_index);
     }
 
-   
-    world.render("two_spheres.png", height, origin, lookat, vfov);
+    world.render(
+        "two_spheres.png",
+        height,
+        origin,
+        lookat,
+        vfov,
+        Vec3::new(0.7, 0.8, 1.),
+        16. / 9.,
+    );
 }
 
 fn render_random_spheres() {
@@ -113,12 +134,146 @@ fn render_random_spheres() {
     let height = 480;
     let world = random_sphere_world();
     let vfov = 20.;
-    
+
     let origin = Vec3::new(13., 2., 3.);
     let lookat = Vec3::new(0., 0., 0.);
 
-    world.render("random_spheres.png", height, origin, lookat, vfov);
-    
+    world.render(
+        "random_spheres.png",
+        height,
+        origin,
+        lookat,
+        vfov,
+        Vec3::new(0.7, 0.8, 1.),
+        16. / 9.,
+    );
+}
+
+fn render_cubes() {
+    println!("Setup");
+    let height = 720;
+    let origin = Vec3::new(26., 3., 6.);
+    let lookat = Vec3::new(0., 2., 0.);
+    let vfov = 20.;
+    let mut world = World::new(vec![]);
+    let cube = Arc::new(Mesh::from_file("cube.obj", false));
+
+    let mat_ground = Arc::new(Lambertian::from_tex(Arc::new(CheckerTex::from_colors(
+        Vec3::new(0.2, 0.3, 0.1),
+        Vec3::new(0.9, 0.9, 0.9),
+    ))));
+    let ground = Sphere::new(Vec3::new(0., -1000.5, -1.), 1000.);
+
+    world.objs.push(ground.with_mat(mat_ground));
+
+    // let sphere = Sphere::new(Vec3::ZERO, 1.0);
+    // let mat = Arc::new(Lambertian::new(Vec3::new(0.9, 0.1, 0.1)));
+    let mat = Arc::new(Normals());
+    let metal = Arc::new(Metal::new(Vec3::new(0.7, 0.6, 0.5), 0.));
+    let light = Arc::new(DiffuseLight::new(Vec3::new(4., 4., 4.)));
+
+    let mesh_1 = Instance::from_trs(
+        cube.clone(),
+        Vec3::new(0., 0., 0.),
+        Quat::IDENTITY,
+        Vec3::new(2.0, 2.0, 2.0),
+    );
+    let light_cube = Instance::from_trs(
+        cube.clone(),
+        Vec3::new(3., 0., 0.),
+        Quat::IDENTITY,
+        Vec3::new(1.0, 1.0, 0.01),
+    );
+    let sphere_mesh = Instance::from_t(cube, Vec3::new(-3., 0., 0.));
+    world.objs.push(mesh_1.with_mat(mat.clone()));
+    world.objs.push(light_cube.with_mat(light));
+    world.objs.push(sphere_mesh.with_mat(metal));
+    world.build();
+    for obj in &world.objs {
+        dbg!(obj.node_index);
+    }
+
+    world.render(
+        "two_spheres.png",
+        height,
+        origin,
+        lookat,
+        vfov,
+        Vec3::new(0., 0., 0.),
+        16. / 9.,
+    );
+}
+
+fn cornell_box() {
+    println!("Setup");
+    let height = 480;
+    let origin = Vec3::new(278., 278., -800.);
+    let lookat = Vec3::new(278., 278., 0.);
+    let vfov = 40.;
+    let mut world = World::new(vec![]);
+    let cube = Arc::new(Mesh::from_file("cube.obj", false));
+
+    // let sphere = Sphere::new(Vec3::ZERO, 1.0);
+    // let mat = Arc::new(Lambertian::new(Vec3::new(0.9, 0.1, 0.1)));
+    let red = Arc::new(Lambertian::new(Vec3::new(0.65, 0.1, 0.1)));
+    let white = Arc::new(Lambertian::new(Vec3::new(0.73, 0.73, 0.73)));
+    let green = Arc::new(Lambertian::new(Vec3::new(0.12, 0.45, 0.15)));
+    let light = Arc::new(DiffuseLight::new(Vec3::new(15., 15., 15.)));
+
+    let left = Instance::from_trs(
+        cube.clone(),
+        Vec3::new(0., 0., 0.),
+        Quat::IDENTITY,
+        Vec3::new(0.1, 555., 555.),
+    );
+    let right = Instance::from_trs(
+        cube.clone(),
+        Vec3::new(555., 0., 0.),
+        Quat::IDENTITY,
+        Vec3::new(0.1, 555., 555.),
+    );
+    let back = Instance::from_trs(
+        cube.clone(),
+        Vec3::new(0., 0., 555.),
+        Quat::IDENTITY,
+        Vec3::new(555., 555., 0.1),
+    );
+    let top = Instance::from_trs(
+        cube.clone(),
+        Vec3::new(0., 555., 0.),
+        Quat::IDENTITY,
+        Vec3::new(555., 0.1, 555.),
+    );
+    let bottom = Instance::from_trs(
+        cube.clone(),
+        Vec3::new(0., 0., 0.),
+        Quat::IDENTITY,
+        Vec3::new(555., 0.1, 555.),
+    );
+    let light_cube = Instance::from_trs(
+        cube.clone(),
+        Vec3::new(213., 554., 227.),
+        Quat::IDENTITY,
+        Vec3::new(130., 0.01, 107.),
+    );
+    dbg!(left.aabb());
+    world.objs.push(left.with_mat(red.clone()));
+    world.objs.push(right.with_mat(green.clone()));
+    world.objs.push(back.with_mat(white.clone()));
+    world.objs.push(top.with_mat(white.clone()));
+    world.objs.push(bottom.with_mat(white.clone()));
+    world.objs.push(light_cube.with_mat(light));
+    world.build();
+
+    world.render(
+        "cornell_box.png",
+        height,
+        origin,
+        lookat,
+        vfov,
+        Vec3::new(0., 0., 0.),
+        1.,
+    );
 }
 
 fn random() -> f32 {

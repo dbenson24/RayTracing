@@ -23,7 +23,8 @@ pub struct RefTri {
     pub norms: Arc<Vec<Vec3>>,
     pub a: u16,
     pub b: u16,
-    pub c: u16
+    pub c: u16,
+    pub smooth: bool,
 }
 
 impl RefTri {
@@ -49,7 +50,10 @@ impl RefTri {
 
 impl Bounded for RefTri {
     fn aabb(&self) -> AABB {
-        AABB::empty().grow(&self.a_pos()).grow(&self.b_pos()).grow(&self.c_pos())
+        AABB::empty()
+            .grow(&self.a_pos())
+            .grow(&self.b_pos())
+            .grow(&self.c_pos())
     }
 }
 
@@ -59,7 +63,11 @@ impl IntersectionRay for RefTri {
         if inter.distance < f32::INFINITY {
             //let old_norm = inter.norm;
             // dbg!(inter.u, inter.v);
-            inter.norm = (inter.u * self.b_norm()) + (inter.v * self.c_norm()) + ((1. - inter.u - inter.v) * self.a_norm());
+            if self.smooth {
+                inter.norm = (inter.u * self.b_norm())
+                    + (inter.v * self.c_norm())
+                    + ((1. - inter.u - inter.v) * self.a_norm());
+            }
             //inter.norm = (0.333333 * self.a_norm()) + (0.333333 * self.b_norm()) + (0.333333 * self.c_norm());
             // inter.norm = Vec3::new(inter.u, inter.v, 1. - inter.u - inter.v);
             // dbg!(inter.norm, old_norm);
@@ -74,10 +82,15 @@ impl Mesh {
     pub fn new() -> Self {
         let mut triangles = vec![];
         let bvh = BVH::build(&mut triangles);
-        Self { triangles, bvh, normals: Arc::new(vec![]), vertices: Arc::new(vec![]) }
+        Self {
+            triangles,
+            bvh,
+            normals: Arc::new(vec![]),
+            vertices: Arc::new(vec![]),
+        }
     }
 
-    pub fn from_file(path: &str) -> Self {
+    pub fn from_file(path: &str, smooth: bool) -> Self {
         let mut mesh = Mesh::new();
         let input = BufReader::new(File::open(path).unwrap());
         println!("Loading");
@@ -94,7 +107,6 @@ impl Mesh {
             nums[b] += 1;
             nums[c] += 1;
 
-            
             let a_to_b = vertices[b] - vertices[a];
             let a_to_c = vertices[c] - vertices[a];
             let mut normal = Vec3::ZERO;
@@ -108,9 +120,12 @@ impl Mesh {
             normals[c] += normal;
         }
 
-        normals.iter_mut().zip(nums.iter()).for_each(|(norm, count)| {
-            *norm = (*norm / (*count as f32)).normalize();
-        });
+        normals
+            .iter_mut()
+            .zip(nums.iter())
+            .for_each(|(norm, count)| {
+                *norm = (*norm / (*count as f32)).normalize();
+            });
 
         mesh.normals = Arc::new(normals);
         mesh.vertices = Arc::new(vertices);
@@ -125,12 +140,13 @@ impl Mesh {
                     b,
                     c,
                     verts: mesh.vertices.clone(),
-                    norms: mesh.normals.clone()
+                    norms: mesh.normals.clone(),
+                    smooth,
                 };
                 Indexed::new(tri)
             })
             .collect();
-        
+
         mesh.rebuild();
 
         mesh
@@ -177,8 +193,6 @@ impl Bounded for Mesh {
         self.bvh.nodes[0].get_node_aabb(&self.triangles)
     }
 }
-
-
 
 pub struct Indexed<T>
 where

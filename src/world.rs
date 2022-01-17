@@ -8,7 +8,12 @@ use bvh::{
 use glam::Vec3;
 use image::ImageBuffer;
 
-use crate::{material::{Material, WithMat}, color::{Color, RGB}, camera::Camera, random};
+use crate::{
+    camera::Camera,
+    color::{Color, RGB},
+    material::{Material, WithMat},
+    random,
+};
 use rayon::prelude::*;
 pub trait Hittable: IntersectionRay + Bounded + Sync + Send {}
 
@@ -54,16 +59,23 @@ impl World {
             })
     }
 
-    pub fn render(&self, path: &str, height: usize, origin: Vec3, lookat: Vec3, vfov: f32) {
-        let aspect_ratio = 16. / 9.;
+    pub fn render(
+        &self,
+        path: &str,
+        height: usize,
+        origin: Vec3,
+        lookat: Vec3,
+        vfov: f32,
+        background: Color,
+        aspect_ratio: f32,
+    ) {
         let width = (height as f32 * aspect_ratio) as usize;
         let mut pixels = vec![Color::default(); width * height];
-    
-        let samples_per_px = 100;
+
+        let samples_per_px = 200;
         let max_bounces = 50;
-        let aspect_ratio = 16.0 / 9.0;
         let aperture = 0.01;
-    
+
         // Camera
         // let dist_to_focus = (lookat - origin).length();
         let dist_to_focus = 10.;
@@ -78,7 +90,6 @@ impl World {
             dist_to_focus,
         );
 
-
         println!("Begin Tracing");
 
         let now = Instant::now();
@@ -89,37 +100,41 @@ impl World {
                 let u = (x as f32 + random()) / (width - 1) as f32;
                 let v = (y as f32 + random()) / (height - 1) as f32;
                 let ray = camera.get_ray(u, v);
-                *px += self.ray_color(&ray, max_bounces);
+                *px += self.ray_color(&ray, max_bounces, background);
             }
         });
-    
+
         let elapsed = now.elapsed();
         println!("Done Tracing in {} ms", elapsed.as_millis());
-    
+
         let image = ImageBuffer::from_fn(width as u32, height as u32, |x, y| {
             let i = (x + (y * width as u32)) as usize;
             let c = pixels[i];
             c.to_px(samples_per_px)
         });
-    
+
         image.save(path).expect("Image to save");
         println!("Image written to {}", path);
     }
 
-    pub fn ray_color(&self, ray: &Ray, depth: usize) -> Color {
+    pub fn ray_color(&self, ray: &Ray, depth: usize, background: Color) -> Color {
         if depth == 0 {
             return Vec3::ZERO;
         }
-    
+
         if let Some((obj, intersection)) = self.first_intersection(*ray, 0.001, f32::INFINITY) {
+            let emit = obj.emit(
+                intersection.u,
+                intersection.v,
+                &ray.at(intersection.distance),
+            );
             if let Some((child_ray, attenuation)) = obj.scatter(ray, &intersection) {
-                self.ray_color(&child_ray, depth - 1) * attenuation
+                emit + self.ray_color(&child_ray, depth - 1, background) * attenuation
             } else {
-                Vec3::ZERO
+                emit
             }
         } else {
-            let t = 0.5 * (ray.direction.y + 1.0);
-            (1. - t) * Vec3::ONE + t * Vec3::new(0.5, 0.7, 1.0)
+            background
         }
     }
 }

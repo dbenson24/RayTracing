@@ -16,6 +16,9 @@ use crate::{
 
 pub trait Material: Sync + Send {
     fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)>;
+    fn emit(&self, u: f32, v: f32, p: &Vec3) -> Color {
+        Vec3::ZERO
+    }
 }
 
 #[derive(Clone)]
@@ -38,6 +41,9 @@ impl WithMat {
 impl Material for WithMat {
     fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
         self.mat.scatter(ray, intersection)
+    }
+    fn emit(&self, u: f32, v: f32, p: &Vec3) -> Color {
+        self.mat.emit(u, v, p)
     }
 }
 
@@ -186,5 +192,30 @@ impl Material for Normals {
         let ray = Ray::new(hit, scatter_direction);
         let albedo = (intersection.norm + 1.) * 0.5;
         Some((ray, albedo))
+    }
+}
+
+pub struct DiffuseLight {
+    pub albedo: Arc<dyn Texture>,
+}
+
+impl DiffuseLight {
+    pub fn new(albedo: Vec3) -> Self {
+        let albedo = Arc::new(SolidTex::new(albedo));
+        Self { albedo }
+    }
+
+    pub fn from_tex(albedo: Arc<dyn Texture>) -> Self {
+        Self { albedo }
+    }
+}
+
+impl Material for DiffuseLight {
+    fn scatter(&self, _ray: &Ray, _intersection: &Intersection) -> Option<(Ray, Color)> {
+        None
+    }
+
+    fn emit(&self, u: f32, v: f32, p: &Vec3) -> Color {
+        self.albedo.value(u, v, p)
     }
 }
