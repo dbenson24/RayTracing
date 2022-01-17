@@ -74,13 +74,23 @@ where
 {
     fn aabb(&self) -> AABB {
         let aabb = self.obj.aabb();
-        let min = self.transform.transform_point3(aabb.min);
-        let max = self.transform.transform_point3(aabb.max);
-        //dbg!(aabb);
-        //dbg!(min, max);
+        // let min = self.transform.transform_point3(aabb.min);
+        // let max = self.transform.transform_point3(aabb.max);
+        let min = aabb.min;
+        let max = aabb.max;
+        let xs = [min.x, max.x];
+        let ys = [min.y, max.y];
+        let zs = [min.z, max.z];
+
         let mut bounds = AABB::empty();
-        bounds.grow_mut(&min);
-        bounds.grow_mut(&max);
+        for x in xs {
+            for y in ys {
+                for z in zs {
+                    let point = self.transform.transform_point3(Vec3::new(x,y,z));
+                    bounds.grow_mut(&point);
+                }
+            }
+        }
         bounds
     }
 }

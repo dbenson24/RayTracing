@@ -151,8 +151,8 @@ fn render_random_spheres() {
 
 fn render_cubes() {
     println!("Setup");
-    let height = 720;
-    let origin = Vec3::new(0., 7., -26.);
+    let height = 480;
+    let origin = Vec3::new(0., 7., 26.);
     let lookat = Vec3::new(0., 2., 0.);
     let vfov = 20.;
     let mut world = World::new(vec![]);
@@ -174,9 +174,9 @@ fn render_cubes() {
 
     let mesh_1 = Instance::from_trs(
         cube.clone(),
-        Vec3::new(0., 0., 0.),
-        // Quat::from_axis_angle(Vec3::Y, (-45. as f32).to_radians()),
-        Quat::IDENTITY,
+        Vec3::new(-1., 0., 0.),
+        Quat::from_axis_angle(Vec3::Y, (-45. as f32).to_radians()),
+        // Quat::IDENTITY,
         Vec3::new(2.0, 2.0, 2.0),
     );
     let light_cube = Instance::from_trs(
@@ -250,7 +250,7 @@ fn cornell_box() {
     );
     let light_cube = Instance::from_trs(
         cube.clone(),
-        Vec3::new(213., 554., 227.),
+        Vec3::new(213., 554., 150.),
         Quat::IDENTITY,
         Vec3::new(130., 0.01, 107.),
     );
