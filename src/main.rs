@@ -256,6 +256,22 @@ fn cornell_box() {
         Quat::IDENTITY,
         Vec3::new(130., 0.01, 107.),
     );
+
+    
+    let front_cube = Instance::from_trs(
+        cube.clone(),
+        Vec3::new(130., 0., 65.),
+        Quat::from_axis_angle(Vec3::Y, (-18. as f32).to_radians()),
+        Vec3::new(165., 165., 165.),
+    );
+
+    
+    let back_cube = Instance::from_trs(
+        cube.clone(),
+        Vec3::new(265., 0., 195.),
+        Quat::from_axis_angle(Vec3::Y, (15. as f32).to_radians()),
+        Vec3::new(165., 330., 165.),
+    );
     dbg!(left.aabb());
     world.objs.push(left.with_mat(red.clone()));
     world.objs.push(right.with_mat(green.clone()));
@@ -263,6 +279,8 @@ fn cornell_box() {
     world.objs.push(top.with_mat(white.clone()));
     world.objs.push(bottom.with_mat(white.clone()));
     world.objs.push(light_cube.with_mat(light));
+    world.objs.push(front_cube.with_mat(white.clone()));
+    world.objs.push(back_cube.with_mat(white.clone()));
     world.build();
 
     world.render(
