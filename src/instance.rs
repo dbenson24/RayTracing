@@ -44,12 +44,14 @@ where
         t_max: bvh::Real,
     ) -> Option<Intersection> {
         let inv = self.transform.inverse();
+        let new_dir = inv.transform_vector3(ray.direction);
+        let ray_len = new_dir.length();
         let local_ray = Ray::new(
             inv.transform_point3(ray.origin),
-            inv.transform_vector3(ray.direction).normalize(),
+            new_dir / ray_len,
         );
         //dbg!(ray.origin, local_ray.origin);
-        if let Some(intersection) = self.obj.intersects_ray(&local_ray, t_min, t_max) {
+        if let Some(intersection) = self.obj.intersects_ray(&local_ray, t_min / ray_len, t_max) {
             let hit_pos = local_ray.at(intersection.distance);
             let world_hit = self.transform.transform_point3(hit_pos);
 

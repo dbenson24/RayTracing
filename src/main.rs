@@ -152,7 +152,7 @@ fn render_random_spheres() {
 fn render_cubes() {
     println!("Setup");
     let height = 720;
-    let origin = Vec3::new(26., 3., 6.);
+    let origin = Vec3::new(0., 7., -26.);
     let lookat = Vec3::new(0., 2., 0.);
     let vfov = 20.;
     let mut world = World::new(vec![]);
@@ -175,31 +175,29 @@ fn render_cubes() {
     let mesh_1 = Instance::from_trs(
         cube.clone(),
         Vec3::new(0., 0., 0.),
+        // Quat::from_axis_angle(Vec3::Y, (-45. as f32).to_radians()),
         Quat::IDENTITY,
         Vec3::new(2.0, 2.0, 2.0),
     );
     let light_cube = Instance::from_trs(
         cube.clone(),
         Vec3::new(3., 0., 0.),
-        Quat::IDENTITY,
-        Vec3::new(1.0, 1.0, 0.01),
+        Quat::from_axis_angle(Vec3::Z, (-45. as f32).to_radians()),
+        Vec3::new(1.0, 1., 1.),
     );
     let sphere_mesh = Instance::from_t(cube, Vec3::new(-3., 0., 0.));
     world.objs.push(mesh_1.with_mat(mat.clone()));
-    world.objs.push(light_cube.with_mat(light));
-    world.objs.push(sphere_mesh.with_mat(metal));
+    //world.objs.push(light_cube.with_mat(light));
+    // world.objs.push(sphere_mesh.with_mat(metal));
     world.build();
-    for obj in &world.objs {
-        dbg!(obj.node_index);
-    }
 
     world.render(
-        "two_spheres.png",
+        "cubes.png",
         height,
         origin,
         lookat,
         vfov,
-        Vec3::new(0., 0., 0.),
+        Vec3::new(0.7, 0.8, 1.),
         16. / 9.,
     );
 }
