@@ -40,23 +40,33 @@ impl World {
         t_min: bvh::Real,
         t_max: bvh::Real,
     ) -> Option<(&'a WithMat, Intersection)> {
-        self.bvh
-            .traverse_iterator(&ray, &self.objs)
-            .fold(None, |hit, obj| {
-                if let Some(inter) = obj.intersects_ray(&ray, t_min, t_max) {
-                    if let Some((last_obj, last_inter)) = hit {
-                        if inter.distance < last_inter.distance {
-                            Some((obj, inter))
-                        } else {
-                            Some((last_obj, last_inter))
-                        }
-                    } else {
-                        Some((obj, inter))
-                    }
-                } else {
-                    hit
-                }
-            })
+        self.bvh.traverse_best_first(t_min, t_max, |aabb| {
+            ray.intersects_aabb_dist(aabb)
+        }, |obj_idx| {
+            let obj = &self.objs[obj_idx];
+            if let Some(inter) = obj.intersects_ray(&ray, t_min, t_max) {
+                Some((inter.distance, (obj, inter)))
+            } else {
+                None
+            }
+        })
+        // self.bvh
+        //     .traverse_iterator(&ray, &self.objs)
+        //     .fold(None, |hit, obj| {
+        //         if let Some(inter) = obj.intersects_ray(&ray, t_min, t_max) {
+        //             if let Some((last_obj, last_inter)) = hit {
+        //                 if inter.distance < last_inter.distance {
+        //                     Some((obj, inter))
+        //                 } else {
+        //                     Some((last_obj, last_inter))
+        //                 }
+        //             } else {
+        //                 Some((obj, inter))
+        //             }
+        //         } else {
+        //             hit
+        //         }
+        //     })
     }
 
     pub fn render(
@@ -93,7 +103,7 @@ impl World {
         println!("Begin Tracing");
 
         let now = Instant::now();
-        pixels.par_iter_mut().enumerate().for_each(|(i, px)| {
+        pixels.iter_mut().enumerate().for_each(|(i, px)| {
             let x = i % width;
             let y = (height - 1) - (i / width);
             for _ in 0..samples_per_px {

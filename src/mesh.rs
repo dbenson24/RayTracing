@@ -164,23 +164,37 @@ impl IntersectionRay for Mesh {
         t_min: bvh::Real,
         t_max: bvh::Real,
     ) -> Option<bvh::ray::Intersection> {
-        self.bvh
-            .traverse_iterator(ray, &self.triangles)
-            .fold(None, |hit, tri| {
-                if let Some(inter) = tri.intersects_ray(ray, t_min, t_max) {
-                    if let Some(last_inter) = hit {
-                        if inter.distance < last_inter.distance {
-                            Some(inter)
-                        } else {
-                            Some(last_inter)
-                        }
-                    } else {
-                        Some(inter)
-                    }
-                } else {
-                    hit
-                }
-            })
+
+        self.bvh.traverse_best_first(t_min, t_max, |aabb| {
+            ray.intersects_aabb_dist(aabb)
+        }, |obj_idx| {
+            let obj = &self.triangles[obj_idx];
+            if let Some(inter) = obj.intersects_ray(&ray, t_min, t_max) {
+                Some((inter.distance, inter))
+            } else {
+                None
+            }
+        })
+
+
+
+        // self.bvh
+        //     .traverse_iterator(ray, &self.triangles)
+        //     .fold(None, |hit, tri| {
+        //         if let Some(inter) = tri.intersects_ray(ray, t_min, t_max) {
+        //             if let Some(last_inter) = hit {
+        //                 if inter.distance < last_inter.distance {
+        //                     Some(inter)
+        //                 } else {
+        //                     Some(last_inter)
+        //                 }
+        //             } else {
+        //                 Some(inter)
+        //             }
+        //         } else {
+        //             hit
+        //         }
+        //     })
     }
 }
 

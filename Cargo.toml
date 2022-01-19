@@ -14,3 +14,7 @@ bvh = { path = "../bvh/bvh" }
 rand = "0.8.4"
 noise = "0.7.0"
 obj-rs = "0.7"
+
+
+[profile.release]
+debug = true
