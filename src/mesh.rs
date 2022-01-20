@@ -107,13 +107,7 @@ impl Mesh {
             nums[b] += 1;
             nums[c] += 1;
 
-            let a_to_b = vertices[b] - vertices[a];
-            let a_to_c = vertices[c] - vertices[a];
-            let mut normal = Vec3::ZERO;
-            normal.x = (a_to_b.y * a_to_c.z) - (a_to_b.z * a_to_c.y);
-            normal.y = (a_to_b.z * a_to_c.x) - (a_to_b.x * a_to_c.z);
-            normal.z = (a_to_b.x * a_to_c.y) - (a_to_b.y * a_to_c.x);
-            normal = normal.normalize();
+            let normal = calc_normal(vertices[a], vertices[b], vertices[c]);
 
             normals[a] += normal;
             normals[b] += normal;
@@ -165,36 +159,36 @@ impl IntersectionRay for Mesh {
         t_max: bvh::Real,
     ) -> Option<bvh::ray::Intersection> {
 
-        self.bvh.traverse_best_first(t_min, t_max, |aabb| {
-            ray.intersects_aabb_dist(aabb)
-        }, |obj_idx| {
-            let obj = &self.triangles[obj_idx];
-            if let Some(inter) = obj.intersects_ray(&ray, t_min, t_max) {
-                Some((inter.distance, inter))
-            } else {
-                None
-            }
-        })
+        // self.bvh.traverse_best_first(t_min, t_max, |aabb| {
+        //     ray.intersects_aabb_dist(aabb)
+        // }, |tri_idx| {
+        //     let tri = &self.triangles[tri_idx];
+        //     if let Some(inter) = tri.intersects_ray(&ray, t_min, t_max) {
+        //         Some((inter.distance, inter))
+        //     } else {
+        //         None
+        //     }
+        // })
 
 
 
-        // self.bvh
-        //     .traverse_iterator(ray, &self.triangles)
-        //     .fold(None, |hit, tri| {
-        //         if let Some(inter) = tri.intersects_ray(ray, t_min, t_max) {
-        //             if let Some(last_inter) = hit {
-        //                 if inter.distance < last_inter.distance {
-        //                     Some(inter)
-        //                 } else {
-        //                     Some(last_inter)
-        //                 }
-        //             } else {
-        //                 Some(inter)
-        //             }
-        //         } else {
-        //             hit
-        //         }
-        //     })
+        self.bvh
+            .traverse_iterator(ray, &self.triangles)
+            .fold(None, |hit, tri| {
+                if let Some(inter) = tri.intersects_ray(ray, t_min, t_max) {
+                    if let Some(last_inter) = hit {
+                        if inter.distance < last_inter.distance {
+                            Some(inter)
+                        } else {
+                            Some(last_inter)
+                        }
+                    } else {
+                        Some(inter)
+                    }
+                } else {
+                    hit
+                }
+            })
     }
 }
 
@@ -253,4 +247,15 @@ where
     fn intersects_ray(&self, ray: &Ray, t_min: Real, t_max: Real) -> Option<Intersection> {
         self.obj.intersects_ray(ray, t_min, t_max)
     }
+}
+
+pub fn calc_normal(a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
+    let a_to_b = a - b;
+    let a_to_c = a - c;
+    let mut normal = Vec3::ZERO;
+    normal.x = (a_to_b.y * a_to_c.z) - (a_to_b.z * a_to_c.y);
+    normal.y = (a_to_b.z * a_to_c.x) - (a_to_b.x * a_to_c.z);
+    normal.z = (a_to_b.x * a_to_c.y) - (a_to_b.y * a_to_c.x);
+    normal = normal.normalize();
+    normal
 }

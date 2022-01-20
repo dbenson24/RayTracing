@@ -1,4 +1,4 @@
-use std::{rc::Rc, sync::Arc};
+use std::{rc::Rc, sync::Arc, f32::consts::PI};
 
 use bvh::{
     aabb::{Bounded, AABB},
@@ -15,7 +15,15 @@ use crate::{
 };
 
 pub trait Material: Sync + Send {
-    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)>;
+    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color, f32)> {
+        None
+    }
+
+    
+    fn scattering_pdf(&self, ray: &Ray, intersection: &Intersection, scattered: &Ray) -> f32 {
+        0.
+    }
+
     fn emit(&self, u: f32, v: f32, p: &Vec3) -> Color {
         Vec3::ZERO
     }
@@ -39,11 +47,17 @@ impl WithMat {
 }
 
 impl Material for WithMat {
-    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
-        self.mat.scatter(ray, intersection)
-    }
+    
     fn emit(&self, u: f32, v: f32, p: &Vec3) -> Color {
         self.mat.emit(u, v, p)
+    }
+
+    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color, f32)> {
+        self.mat.scatter(ray, intersection)
+    }
+
+    fn scattering_pdf(&self, ray: &Ray, intersection: &Intersection, scattered: &Ray) -> f32 {
+        self.mat.scattering_pdf(ray, intersection, scattered)
     }
 }
 
@@ -103,7 +117,7 @@ impl Lambertian {
 }
 
 impl Material for Lambertian {
-    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
+    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color, f32)> {
         let mut scatter_direction = intersection.norm + rand_unit_vector();
 
         if scatter_direction.abs().min_element() < 1e-6 {
@@ -112,7 +126,17 @@ impl Material for Lambertian {
         let hit = ray.at(intersection.distance);
 
         let ray = Ray::new(hit, scatter_direction);
-        Some((ray, self.albedo.value(intersection.u, intersection.v, &hit)))
+        let pdf = intersection.norm.dot(scatter_direction) / PI;
+        Some((ray, self.albedo.value(intersection.u, intersection.v, &hit), pdf))
+    }
+
+    fn scattering_pdf(&self, ray: &Ray, intersection: &Intersection, scattered: &Ray) -> f32 {
+        let cosine = intersection.norm.dot(scattered.direction);
+        if cosine < 0. { 
+            0.
+         } else {
+            cosine / PI
+         }
     }
 }
 
@@ -128,17 +152,17 @@ impl Metal {
 }
 
 impl Material for Metal {
-    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
-        let reflected = reflect(ray.direction, intersection.norm) + (self.fuzz * rand_in_sphere());
-        if reflected.dot(intersection.norm) > 0. {
-            Some((
-                Ray::new(ray.at(intersection.distance), reflected),
-                self.albedo,
-            ))
-        } else {
-            None
-        }
-    }
+    // fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
+    //     let reflected = reflect(ray.direction, intersection.norm) + (self.fuzz * rand_in_sphere());
+    //     if reflected.dot(intersection.norm) > 0. {
+    //         Some((
+    //             Ray::new(ray.at(intersection.distance), reflected),
+    //             self.albedo,
+    //         ))
+    //     } else {
+    //         None
+    //     }
+    // }
 }
 
 pub struct Dielectric {
@@ -154,45 +178,45 @@ impl Dielectric {
 }
 
 impl Material for Dielectric {
-    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
-        let attenuation = Color::new(1.0, 1.0, 1.0);
-        let refraction_ratio = if intersection.back_face {
-            self.index_of_refraction
-        } else {
-            1.0 / self.index_of_refraction
-        };
-        let cos_theta = (-ray.direction).dot(intersection.norm).min(1.);
-        let sin_theta = (1. - cos_theta * cos_theta).sqrt();
-        let direction = if refraction_ratio * sin_theta > 1.
-            || reflectance(cos_theta, refraction_ratio) > random()
-        {
-            reflect(ray.direction, intersection.norm)
-        } else {
-            refract(ray.direction, intersection.norm, refraction_ratio)
-        };
+    // fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
+    //     let attenuation = Color::new(1.0, 1.0, 1.0);
+    //     let refraction_ratio = if intersection.back_face {
+    //         self.index_of_refraction
+    //     } else {
+    //         1.0 / self.index_of_refraction
+    //     };
+    //     let cos_theta = (-ray.direction).dot(intersection.norm).min(1.);
+    //     let sin_theta = (1. - cos_theta * cos_theta).sqrt();
+    //     let direction = if refraction_ratio * sin_theta > 1.
+    //         || reflectance(cos_theta, refraction_ratio) > random()
+    //     {
+    //         reflect(ray.direction, intersection.norm)
+    //     } else {
+    //         refract(ray.direction, intersection.norm, refraction_ratio)
+    //     };
 
-        Some((
-            Ray::new(ray.at(intersection.distance), direction),
-            attenuation,
-        ))
-    }
+    //     Some((
+    //         Ray::new(ray.at(intersection.distance), direction),
+    //         attenuation,
+    //     ))
+    // }
 }
 
 pub struct Normals();
 
 impl Material for Normals {
-    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
-        let mut scatter_direction = intersection.norm + rand_unit_vector();
+    // fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color)> {
+    //     let mut scatter_direction = intersection.norm + rand_unit_vector();
 
-        if scatter_direction.abs().min_element() < 1e-6 {
-            scatter_direction = intersection.norm
-        }
-        let hit = ray.at(intersection.distance);
+    //     if scatter_direction.abs().min_element() < 1e-6 {
+    //         scatter_direction = intersection.norm
+    //     }
+    //     let hit = ray.at(intersection.distance);
 
-        let ray = Ray::new(hit, scatter_direction);
-        let albedo = (intersection.norm + 1.) * 0.5;
-        Some((ray, albedo))
-    }
+    //     let ray = Ray::new(hit, scatter_direction);
+    //     let albedo = (intersection.norm + 1.) * 0.5;
+    //     Some((ray, albedo))
+    // }
 }
 
 pub struct DiffuseLight {
@@ -211,7 +235,7 @@ impl DiffuseLight {
 }
 
 impl Material for DiffuseLight {
-    fn scatter(&self, _ray: &Ray, _intersection: &Intersection) -> Option<(Ray, Color)> {
+    fn scatter(&self, _ray: &Ray, _intersection: &Intersection) -> Option<(Ray, Color, f32)> {
         None
     }
 

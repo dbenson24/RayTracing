@@ -336,6 +336,10 @@ fn rand_vec3_range(min: f32, max: f32) -> Vec3 {
     Vec3::splat(min) + (diff * rand_vec3())
 }
 
+fn pdf_vec(p: &Vec3) -> f32 {
+    1. / (4. * PI)
+}
+
 fn reflect(d: Vec3, n: Vec3) -> Vec3 {
     d - (2. * (d.dot(n)) * n)
 }
