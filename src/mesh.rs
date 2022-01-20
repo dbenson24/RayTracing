@@ -158,7 +158,6 @@ impl IntersectionRay for Mesh {
         t_min: bvh::Real,
         t_max: bvh::Real,
     ) -> Option<bvh::ray::Intersection> {
-
         // self.bvh.traverse_best_first(t_min, t_max, |aabb| {
         //     ray.intersects_aabb_dist(aabb)
         // }, |tri_idx| {
@@ -169,8 +168,6 @@ impl IntersectionRay for Mesh {
         //         None
         //     }
         // })
-
-
 
         self.bvh
             .traverse_iterator(ray, &self.triangles)

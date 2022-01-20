@@ -82,9 +82,9 @@ impl World {
         let width = (height as f32 * aspect_ratio) as usize;
         let mut pixels = vec![Color::default(); width * height];
 
-        let samples_per_px = 200;
+        let samples_per_px = 1000;
         let max_bounces = 50;
-        let aperture = 0.01;
+        let aperture = 0.0;
 
         // Camera
         // let dist_to_focus = (lookat - origin).length();
@@ -132,14 +132,17 @@ impl World {
             return Vec3::ZERO;
         }
 
-        if let Some((obj, intersection)) = self.first_intersection(*ray, 0.001, f32::INFINITY) {
+        if let Some((obj, intersection)) = self.first_intersection(*ray, 0.00001, f32::INFINITY) {
             let emit = obj.emit(
                 intersection.u,
                 intersection.v,
                 &ray.at(intersection.distance),
             );
             if let Some((child_ray, attenuation, pdf)) = obj.scatter(ray, &intersection) {
-                emit + self.ray_color(&child_ray, depth - 1, background) * attenuation * obj.scattering_pdf(&ray, &intersection, &child_ray) / pdf
+                emit + self.ray_color(&child_ray, depth - 1, background)
+                    * attenuation
+                    * obj.scattering_pdf(&ray, &intersection, &child_ray)
+                    / pdf
             } else {
                 emit
             }

@@ -3,13 +3,15 @@ mod color;
 mod instance;
 mod material;
 mod mesh;
+mod orthonormalbasis;
 mod texture;
 mod world;
 
 use bvh::{
+    aabb::Bounded,
     bvh::BVH,
     ray::{Intersection, IntersectionRay, Ray},
-    sphere::Sphere, aabb::Bounded,
+    sphere::Sphere,
 };
 use color::Color;
 use glam::{Quat, Vec3};
@@ -255,7 +257,6 @@ fn cornell_box() {
         Vec3::new(130., 0.01, 107.),
     );
 
-    
     let front_cube = Instance::from_trs(
         cube.clone(),
         Vec3::new(130., 0., 65.),
@@ -263,7 +264,6 @@ fn cornell_box() {
         Vec3::new(165., 165., 165.),
     );
 
-    
     let back_cube = Instance::from_trs(
         cube.clone(),
         Vec3::new(265., 0., 195.),
@@ -325,6 +325,16 @@ fn rand_in_disk() -> Vec3 {
 
 fn rand_unit_vector() -> Vec3 {
     rand_in_sphere().normalize()
+}
+
+fn rand_cos_dir() -> Vec3 {
+    let r1 = random();
+    let r2 = random();
+    let z = (1. - r2).sqrt();
+    let phi = 2. * PI * r1;
+    let x = phi.cos() * r2.sqrt();
+    let y = phi.sin() * r2.sqrt();
+    Vec3::new(x, y, z)
 }
 
 fn rand_vec3() -> Vec3 {

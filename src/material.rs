@@ -1,4 +1,4 @@
-use std::{rc::Rc, sync::Arc, f32::consts::PI};
+use std::{f32::consts::PI, rc::Rc, sync::Arc};
 
 use bvh::{
     aabb::{Bounded, AABB},
@@ -11,7 +11,7 @@ use crate::{
     color::Color,
     rand_in_sphere, rand_unit_vector, random, reflect, reflectance, refract,
     texture::{SolidTex, Texture},
-    world::Hittable,
+    world::Hittable, orthonormalbasis::OrthoNormalBasis,
 };
 
 pub trait Material: Sync + Send {
@@ -19,7 +19,6 @@ pub trait Material: Sync + Send {
         None
     }
 
-    
     fn scattering_pdf(&self, ray: &Ray, intersection: &Intersection, scattered: &Ray) -> f32 {
         0.
     }
@@ -47,7 +46,6 @@ impl WithMat {
 }
 
 impl Material for WithMat {
-    
     fn emit(&self, u: f32, v: f32, p: &Vec3) -> Color {
         self.mat.emit(u, v, p)
     }
@@ -120,23 +118,32 @@ impl Material for Lambertian {
     fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<(Ray, Color, f32)> {
         let mut scatter_direction = intersection.norm + rand_unit_vector();
 
-        if scatter_direction.abs().min_element() < 1e-6 {
-            scatter_direction = intersection.norm
+        //let uvw = OrthoNormalBasis::from_w(&intersection.norm);
+
+        if scatter_direction.x.abs() < 1e-6
+            && scatter_direction.y.abs() < 1e-6
+            && scatter_direction.z.abs() < 1e-6
+        {
+            scatter_direction = intersection.norm;
         }
         let hit = ray.at(intersection.distance);
 
         let ray = Ray::new(hit, scatter_direction);
-        let pdf = intersection.norm.dot(scatter_direction) / PI;
-        Some((ray, self.albedo.value(intersection.u, intersection.v, &hit), pdf))
+        let pdf = intersection.norm.dot(ray.direction) / PI;
+        Some((
+            ray,
+            self.albedo.value(intersection.u, intersection.v, &hit),
+            pdf,
+        ))
     }
 
     fn scattering_pdf(&self, ray: &Ray, intersection: &Intersection, scattered: &Ray) -> f32 {
         let cosine = intersection.norm.dot(scattered.direction);
-        if cosine < 0. { 
+        if cosine < 0. {
             0.
-         } else {
+        } else {
             cosine / PI
-         }
+        }
     }
 }
 
